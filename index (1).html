@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SALAHELDIN DASHBOARD — Advanced</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#090b0f;--card:#12151c;--blue:#3067ff;--green:#26a69a;--red:#ef5350;--text:#e0e0e0}
+*{box-sizing:border-box}
+body{margin:0;font-family:sans-serif;direction:rtl;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--card);border-bottom:1px solid #162033}
+.header b{font-size:18px;letter-spacing:1px;color:var(--blue)}
+.header small{color:#9aa3b2}
+.container{max-width:1200px;margin:18px auto;padding:0 12px}
+.controls{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.controls .field{background:var(--card);padding:10px;border-radius:10px;border:1px solid #1e222d}
+.controls input, .controls select{background:transparent;border:none;color:var(--text);outline:none}
+.controls label{display:block;color:#9aa3b2;font-size:12px;margin-bottom:6px}
+.dashboard{display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-bottom:12px}
+.stat-card{background:var(--card);padding:12px;border-radius:10px;text-align:center;border:1px solid #1e222d}
+.stat-card h4{margin:0;font-size:11px;color:#8891a0;text-transform:uppercase}
+.stat-card b{font-size:18px;display:block;margin-top:6px}
+.main-chart{background:var(--card);padding:12px;border-radius:12px;border:1px solid #1e222d;margin-bottom:12px}
+.form-section{background:var(--card);padding:16px;border-radius:12px;margin-bottom:12px;border:1px solid #1e222d}
+.input-row{display:flex;gap:10px}
+.input-row .col{flex:1}
+input, select, textarea, button{width:100%;padding:10px;margin:8px 0;border-radius:8px;border:1px solid #2a2e39;background:#1e222d;color:#fff;font-size:14px}
+textarea{height:70px;resize:vertical}
+button{background:var(--blue);border:none;font-weight:700;cursor:pointer;transition:0.2s}
+button:hover{opacity:0.9}
+.trades-list{overflow-x:auto;background:transparent;padding-bottom:20px}
+table{width:100%;border-collapse:collapse;background:transparent;font-size:13px}
+th, td{padding:10px;text-align:center;border-bottom:1px solid #1e222d;white-space:nowrap}
+.win{color:var(--green)} .loss{color:var(--red)}
+.note-text{font-size:12px;color:#aaa;max-width:220px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actions{display:flex;gap:8px;justify-content:center}
+.tag{padding:6px 8px;border-radius:8px;background:#11131a;border:1px solid #22262f;color:#bfc9d8;font-size:12px}
+.small-btn{padding:6px 8px;border-radius:8px;border:none;cursor:pointer}
+.del{background:#2b0f12;color:#fff}
+.export{background:#0b3b22}
+.meta{font-size:12px;color:#9aa3b2;margin-top:6px}
+.filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+
+/* modal */
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:30;visibility:hidden;opacity:0;transition:0.15s}
+.modal.show{visibility:visible;opacity:1}
+.modal .card{width:100%;max-width:720px;background:var(--card);padding:16px;border-radius:10px;border:1px solid #22262f}
+
+/* responsive */
+@media (max-width:1000px){
+  .dashboard{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:600px){
+  .dashboard{grid-template-columns:repeat(1,1fr)}
+  .input-row{flex-direction:column}
+  th, td{font-size:12px;padding:8px}
+  .controls{gap:6px}
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <b>SALAHELDIN DASHBOARD 🚀</b>
+  <small>نسخة محسّنة — إدارة وتحليل الصفقات</small>
+</div>
+
+<div class="container">
+
+  <div class="controls">
+    <div class="field">
+      <label>رأس المال الابتدائي (Start Capital $)</label>
+      <input id="startCapital" type="number" step="any" value="10000" />
+    </div>
+
+    <div class="field">
+      <label>بحث بالأصل</label>
+      <input id="searchAsset" placeholder="مثلاً: BTC أو ذهب" />
+    </div>
+
+    <div class="field">
+      <label>من تاريخ</label>
+      <input id="filterFrom" type="date" />
+    </div>
+
+    <div class="field">
+      <label>إلى تاريخ</label>
+      <input id="filterTo" type="date" />
+    </div>
+
+    <div class="field" style="display:flex;align-items:center;">
+      <button id="applyFilter" class="small-btn" style="background:#264653">تطبيق الفلتر</button>
+      <button id="clearFilter" class="small-btn" style="background:#6c757d;margin-left:6px">مسح الفلاتر</button>
+    </div>
+
+    <div style="margin-inline-start:auto" class="field">
+      <label>إجراءات</label>
+      <div style="display:flex;gap:8px">
+        <button id="exportBtn" class="small-btn export">تصدير CSV</button>
+        <button id="clearBtn" class="small-btn del">🗑️ مسح الكل</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard" role="region" aria-label="الإحصائيات">
+    <div class="stat-card"><h4>عدد الصفقات</h4><b id="tCount">0</b></div>
+    <div class="stat-card"><h4>نسبة النجاح</h4><b id="winRate" class="win">0%</b></div>
+    <div class="stat-card"><h4>صافي الأرباح ($)</h4><b id="net">$0.00</b></div>
+    <div class="stat-card"><h4>عامل الربح (Profit Factor)</h4><b id="pf">0.0</b></div>
+
+    <div class="stat-card"><h4>Max Drawdown ($)</h4><b id="maxDD">-$0.00</b></div>
+    <div class="stat-card"><h4>CAGR (تقريبي)</h4><b id="cagr">0.0%</b></div>
+    <div class="stat-card"><h4>Average Win / Loss</h4><b id="avgWL">$0 / $0</b></div>
+    <div class="stat-card"><h4>Expectancy</h4><b id="expectancy">$0.00</b></div>
+  </div>
+
+  <div class="main-chart" aria-hidden="false">
+    <canvas id="equityChart" height="160"></canvas>
+    <div class="meta">Equity (زرقاء) و Drawdown (حمراء)</div>
+  </div>
+
+  <div class="form-section" aria-label="إضافة صفقة">
+    <h3>➕ إضافة / إدخال صفقة جديدة</h3>
+    <div class="input-row">
+      <div class="col"><input id="asset" placeholder="الأصل (مثلاً: BTC, ذهب, TSLA)"></div>
+      <div style="width:140px">
+        <select id="type">
+          <option value="buy">شراء (Long)</option>
+          <option value="sell">بيع (Short)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="input-row">
+      <div class="col"><input id="entry" type="number" step="any" placeholder="سعر الدخول"></div>
+      <div class="col"><input id="stop" type="number" step="any" placeholder="سعر وقف الخسارة (Stop)"></div>
+      <div class="col"><input id="exit" type="number" step="any" placeholder="سعر الخروج/الهدف"></div>
+    </div>
+
+    <div class="input-row">
+      <div class="col"><input id="risk" type="number" step="any" placeholder="المخاطرة بالدولار ($)"></div>
+      <div style="width:160px"><input id="date" type="date" /></div>
+    </div>
+
+    <textarea id="note" placeholder="ملاحظات الصفقة (لماذا دخلت؟)"></textarea>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="saveBtn">حفظ الصفقة</button>
+      <button id="addSample" class="small-btn" style="background:#2a6f3c">أضف مثال عشوائي</button>
+    </div>
+  </div>
+
+  <div class="trades-list" aria-label="قائمة الصفقات">
+    <table>
+      <thead>
+        <tr>
+          <th>الزمن</th>
+          <th>الأصل</th>
+          <th>نوع</th>
+          <th>دخول</th>
+          <th>وقف</th>
+          <th>خروج</th>
+          <th>حجم</th>
+          <th>نتيجة ($)</th>
+          <th>R:R</th>
+          <th>ملاحظة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="modal" class="modal" role="dialog" aria-modal="true">
+  <div class="card">
+    <h3>تعديل الصفقة</h3>
+    <div class="input-row">
+      <div class="col"><input id="m_asset" placeholder="الأصل"></div>
+      <div style="width:140px">
+        <select id="m_type"><option value="buy">شراء</option><option value="sell">بيع</option></select>
+      </div>
+    </div>
+    <div class="input-row">
+      <div class="col"><input id="m_entry" type="number" step="any" placeholder="سعر دخول"></div>
+      <div class="col"><input id="m_stop" type="number" step="any" placeholder="وقف"></div>
+      <div class="col"><input id="m_exit" type="number" step="any" placeholder="سعر خروج"></div>
+    </div>
+    <div class="input-row">
+      <div class="col"><input id="m_risk" type="number" step="any" placeholder="مخاطرة $"></div>
+      <div style="width:160px"><input id="m_date" type="date" /></div>
+    </div>
+    <textarea id="m_note" placeholder="ملاحظة"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button id="saveEdit" class="small-btn" style="background:#2266ff">حفظ</button>
+      <button id="closeModal" class="small-btn" style="background:#6c757d">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Storage key
+const STORAGE_KEY = "salaheldin_db_v3";
+
+// DOM
+const startCapitalEl = document.getElementById("startCapital");
+const searchAsset = document.getElementById("searchAsset");
+const filterFrom = document.getElementById("filterFrom");
+const filterTo = document.getElementById("filterTo");
+const applyFilter = document.getElementById("applyFilter");
+const clearFilter = document.getElementById("clearFilter");
+
+const asset = document.getElementById("asset");
+const type = document.getElementById("type");
+const entry = document.getElementById("entry");
+const exitP = document.getElementById("exit");
+const stop = document.getElementById("stop");
+const risk = document.getElementById("risk");
+const note = document.getElementById("note");
+const dateInput = document.getElementById("date");
+
+const rows = document.getElementById("rows");
+const tCount = document.getElementById("tCount");
+const winRate = document.getElementById("winRate");
+const pf = document.getElementById("pf");
+const netEl = document.getElementById("net");
+const maxDDEl = document.getElementById("maxDD");
+const cagrEl = document.getElementById("cagr");
+const avgWLEl = document.getElementById("avgWL");
+const expectancyEl = document.getElementById("expectancy");
+
+const saveBtn = document.getElementById("saveBtn");
+const clearBtn = document.getElementById("clearBtn");
+const exportBtn = document.getElementById("exportBtn");
+const addSample = document.getElementById("addSample");
+
+const modal = document.getElementById("modal");
+const m_asset = document.getElementById("m_asset");
+const m_type = document.getElementById("m_type");
+const m_entry = document.getElementById("m_entry");
+const m_exit = document.getElementById("m_exit");
+const m_stop = document.getElementById("m_stop");
+const m_risk = document.getElementById("m_risk");
+const m_note = document.getElementById("m_note");
+const m_date = document.getElementById("m_date");
+const saveEdit = document.getElementById("saveEdit");
+const closeModal = document.getElementById("closeModal");
+
+// state
+let trades = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+let chart;
+let editId = null;
+let activeFilters = { asset: "", from: null, to: null };
+
+// helpers
+const fmt = num => Number(num).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+// add trade
+function addTrade(){
+  const a = asset.value.trim();
+  const t = type.value;
+  const e = parseFloat(entry.value);
+  const x = parseFloat(exitP.value);
+  const s = parseFloat(stop.value);
+  const r = parseFloat(risk.value);
+  const n = note.value.trim();
+  const d = dateInput.value;
+
+  if(!a || isNaN(e) || isNaN(x) || isNaN(s) || isNaN(r) || r <= 0) {
+    return alert("يرجى إدخال جميع الحقول (بما في ذلك وقف الخسارة والمخاطرة بالدولار).");
+  }
+  const stopDist = Math.abs(e - s);
+  if(stopDist === 0) return alert("مسافة وقف الخسارة لا يمكن أن تكون صفر.");
+
+  const positionSize = r / stopDist;
+  const pnlPerUnit = (t === "buy") ? (x - e) : (e - x);
+  const profitUSD = pnlPerUnit * positionSize;
+  const rr = profitUSD / r;
+
+  const trade = {
+    id: uid(),
+    asset: a,
+    type: t,
+    entry: e,
+    stop: s,
+    exit: x,
+    risk: r,
+    positionSize: Number(positionSize.toFixed(4)),
+    pnl: Number(profitUSD.toFixed(2)),
+    rr: Number(rr.toFixed(2)),
+    note: n || "بدون ملاحظات",
+    created_at: d ? new Date(d).toISOString() : new Date().toISOString()
+  };
+
+  trades.push(trade);
+  persist();
+  clearForm();
+  render();
+}
+
+function clearForm(){
+  asset.value=""; entry.value=""; exitP.value=""; stop.value=""; risk.value=""; note.value=""; dateInput.value="";
+}
+
+// persist
+function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(trades)); }
+
+// delete
+function deleteTrade(id){
+  if(!confirm("هل تريد حذف هذه الصفقة؟")) return;
+  trades = trades.filter(t=>t.id !== id);
+  persist(); render();
+}
+
+// edit
+function openEdit(id){
+  const t = trades.find(x=>x.id===id);
+  if(!t) return;
+  editId = id;
+  m_asset.value = t.asset;
+  m_type.value = t.type;
+  m_entry.value = t.entry;
+  m_stop.value = t.stop;
+  m_exit.value = t.exit;
+  m_risk.value = t.risk;
+  m_note.value = t.note;
+  m_date.value = new Date(t.created_at).toISOString().slice(0,10);
+  modal.classList.add("show");
+}
+function closeEdit(){ modal.classList.remove("show"); editId = null; }
+function saveEditTrade(){
+  if(!editId) return;
+  const a = m_asset.value.trim();
+  const t = m_type.value;
+  const e = parseFloat(m_entry.value);
+  const x = parseFloat(m_exit.value);
+  const s = parseFloat(m_stop.value);
+  const r = parseFloat(m_risk.value);
+  const n = m_note.value.trim();
+  const d = m_date.value;
+  if(!a || isNaN(e) || isNaN(x) || isNaN(s) || isNaN(r) || r <= 0) {
+    return alert("تحقق من المدخلات قبل الحفظ.");
+  }
+  const stopDist = Math.abs(e - s);
+  if(stopDist === 0) return alert("مسافة وقف الخسارة لا يمكن أن تكون صفر.");
+
+  const positionSize = r / stopDist;
+  const pnlPerUnit = (t === "buy") ? (x - e) : (e - x);
+  const profitUSD = pnlPerUnit * positionSize;
+  const rr = profitUSD / r;
+
+  trades = trades.map(tr => {
+    if(tr.id !== editId) return tr;
+    return {
+      ...tr,
+      asset: a, type: t, entry: e, stop: s, exit: x,
+      risk: r, positionSize: Number(positionSize.toFixed(4)),
+      pnl: Number(profitUSD.toFixed(2)), rr: Number(rr.toFixed(2)),
+      note: n || "بدون ملاحظات",
+      created_at: d ? new Date(d).toISOString() : new Date().toISOString()
+    };
+  });
+  persist(); closeEdit(); render();
+}
+
+// clear all
+function clearAll(){
+  if(!confirm("تأكيد مسح السجل بالكامل. لا يمكن التراجع.")) return;
+  trades = [];
+  persist(); render();
+}
+
+// export CSV
+function exportCSV(){
+  if(trades.length === 0) return alert("لا توجد صفقات للتصدير.");
+  const headers = ["created_at","asset","type","entry","stop","exit","risk","positionSize","pnl","rr","note"];
+  const rowsCSV = trades.map(t => headers.map(h => `"${String(t[h] ?? "")}"`).join(","));
+  const csv = [headers.join(","), ...rowsCSV].join("\n");
+  const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `salaheldin_trades_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// filters
+function applyFilters(){
+  activeFilters.asset = searchAsset.value.trim().toLowerCase();
+  activeFilters.from = filterFrom.value ? new Date(filterFrom.value) : null;
+  activeFilters.to = filterTo.value ? new Date(filterTo.value) : null;
+  render();
+}
+function clearFilters(){
+  searchAsset.value=""; filterFrom.value=""; filterTo.value="";
+  activeFilters = { asset: "", from: null, to: null };
+  render();
+}
+
+// statistics calculations
+function calcStats(filteredTrades, startCapital){
+  const stats = {
+    total: filteredTrades.length,
+    wins:0, losses:0, net:0, gWin:0, gLoss:0,
+    avgWin:0, avgLoss:0, largestWin:0, largestLoss:0,
+    expectancy:0, profitFactor:0,
+    equitySeries: [startCapital], ddSeries:[0], maxDrawdown:0,
+    cagr:0, consecWin:0, consecLoss:0
+  };
+
+  let peak = startCapital;
+  let equity = startCapital;
+  let currentWinStreak = 0, currentLossStreak = 0, maxWinStreak = 0, maxLossStreak = 0;
+
+  filteredTrades.forEach(t=>{
+    stats.net += t.pnl;
+    if(t.pnl > 0){ stats.wins++; stats.gWin += t.pnl; currentWinStreak++; currentLossStreak=0; }
+    else { stats.losses++; stats.gLoss += Math.abs(t.pnl); currentLossStreak++; currentWinStreak=0; }
+    if(currentWinStreak > maxWinStreak) maxWinStreak = currentWinStreak;
+    if(currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+
+    stats.largestWin = Math.max(stats.largestWin, t.pnl);
+    stats.largestLoss = Math.min(stats.largestLoss, t.pnl);
+
+    equity += t.pnl;
+    stats.equitySeries.push(Number(equity.toFixed(2)));
+    if(equity > peak) peak = equity;
+    let dd = equity - peak; // negative or 0
+    stats.ddSeries.push(Number(dd.toFixed(2)));
+    stats.maxDrawdown = Math.min(stats.maxDrawdown, dd);
+  });
+
+  stats.avgWin = stats.wins ? (stats.gWin / stats.wins) : 0;
+  stats.avgLoss = stats.losses ? (stats.gLoss / stats.losses) : 0;
+  stats.profitFactor = stats.gLoss > 0 ? (stats.gWin / stats.gLoss) : (stats.gWin > 0 ? stats.gWin : 0);
+  stats.expectancy = ( (stats.avgWin * (stats.wins / Math.max(1, stats.total))) - (stats.avgLoss * (stats.losses / Math.max(1, stats.total))) ).toFixed(2);
+
+  // streaks
+  stats.maxWinStreak = maxWinStreak;
+  stats.maxLossStreak = maxLossStreak;
+
+  // CAGR calculation (approx): based on first and last trade dates
+  let cagr = 0;
+  if(filteredTrades.length > 0){
+    const dates = filteredTrades.map(t=>new Date(t.created_at)).sort((a,b)=>a-b);
+    const first = dates[0];
+    const last = dates[dates.length-1];
+    const years = Math.max( (last - first) / (1000*60*60*24*365), 1/365 ); // at least one day
+    const startVal = startCapital;
+    const endVal = stats.equitySeries.length ? stats.equitySeries[stats.equitySeries.length-1] : startCapital;
+    if(startVal > 0){
+      cagr = Math.pow( endVal / startVal, 1/years ) - 1;
+    }
+  }
+  stats.cagr = cagr;
+  stats.expectancy = Number(stats.expectancy);
+  return stats;
+}
+
+// render
+function render(){
+  rows.innerHTML = "";
+  // apply active filters
+  let filtered = trades.slice().sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+  if(activeFilters.asset) filtered = filtered.filter(t => t.asset.toLowerCase().includes(activeFilters.asset));
+  if(activeFilters.from) filtered = filtered.filter(t => new Date(t.created_at) >= activeFilters.from);
+  if(activeFilters.to) filtered = filtered.filter(t => new Date(t.created_at) <= new Date(activeFilters.to.getTime() + 24*60*60*1000 -1)); // include day
+
+  // compute stats
+  const startCapital = Number(startCapitalEl.value) > 0 ? Number(startCapitalEl.value) : 0;
+  const stats = calcStats(filtered, startCapital);
+
+  // populate rows (show newest first)
+  filtered.slice().reverse().forEach(t=>{
